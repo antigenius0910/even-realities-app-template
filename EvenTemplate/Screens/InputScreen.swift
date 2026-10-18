@@ -169,15 +169,25 @@ struct InputScreen: View {
             .padding(.vertical, 8)
     }
 
-    /// A beat counts as answered by any ring gesture from 0.3s before it to
-    /// 0.7s after it, which allows for reaction time.
+    /// Each beat owns the time from 0.3s before it until 0.3s before the next
+    /// beat (1s after the last one). The windows have no gaps, so a slow tap
+    /// still lands on its beat instead of falling between two; taps arrive
+    /// about 200-500 ms after the beat.
+    private func beatWindow(_ index: Int) -> Range<Date> {
+        let start = beatTimes[index].addingTimeInterval(-0.3)
+        let end = index + 1 < beatTimes.count
+            ? beatTimes[index + 1].addingTimeInterval(-0.3)
+            : beatTimes[index].addingTimeInterval(1.0)
+        return start ..< end
+    }
+
+    private func gestures(onBeat index: Int) -> [Date] {
+        let window = beatWindow(index)
+        return ringGestures.map(\.date).filter { window.contains($0) }.sorted()
+    }
+
     private var missedBeats: [Int] {
-        beatTimes.enumerated().compactMap { index, beat in
-            let start = beat.addingTimeInterval(-0.3)
-            let end = beat.addingTimeInterval(0.7)
-            let answered = ringGestures.contains { $0.date >= start && $0.date < end }
-            return answered ? nil : index + 1
-        }
+        beatTimes.indices.filter { gestures(onBeat: $0).isEmpty }.map { $0 + 1 }
     }
 
     private func startTapTest() {
@@ -262,14 +272,14 @@ struct InputScreen: View {
             "Direct from the ring: \(ringGestures.count - relayed) · Via the glasses: \(relayed)",
             "Beats with no ring gesture: \(missed.isEmpty ? "none" : missed.map(String.init).joined(separator: ", "))",
             "",
-            "Beats (delay = first ring gesture in the beat's window):",
+            "Beats (delay = first ring gesture after the beat; a beat runs until 0.3s before the next):",
         ]
         for (index, beat) in beatTimes.enumerated() {
-            let answer = ringGestures
-                .map(\.date)
-                .filter { $0 >= beat.addingTimeInterval(-0.3) && $0 < beat.addingTimeInterval(0.7) }
-                .min()
-            let outcome = answer.map { "delay \(Int(($0.timeIntervalSince(beat) * 1000).rounded())) ms" } ?? "MISSED"
+            let answers = gestures(onBeat: index)
+            var outcome = answers.first.map { "delay \(Int(($0.timeIntervalSince(beat) * 1000).rounded())) ms" } ?? "MISSED"
+            if answers.count > 1 {
+                outcome += " (\(answers.count) gestures)"
+            }
             lines.append("Beat \(index + 1)  \(Self.timeFormatter.string(from: beat))  \(outcome)")
         }
         lines += reportBody()
@@ -287,7 +297,9 @@ struct InputScreen: View {
             "Saved: \(Self.reportDateFormatter.string(from: Date()))",
             "Glasses: \(glasses.ready ? "connected and ready" : glasses.connection.rawValue.lowercased())",
             "Glasses battery: \(glasses.battery?.level.map { "\($0)%" } ?? "unknown")",
-            "Ring connected to the phone: \(session.link.ringConnected ? "yes" : "no")",
+            // controllerConnected is set by the R1 driver and also by the G2
+            // when it relays a ring gesture, so it covers both paths.
+            "Ring connected (directly or through the glasses): \(session.link.ringConnected ? "yes" : "no")",
         ]
     }
 
