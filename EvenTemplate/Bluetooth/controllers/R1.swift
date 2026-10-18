@@ -289,6 +289,25 @@ class R1: NSObject, ControllerManager {
         ringPeripheral?.writeValue(payload, for: wc, type: .withoutResponse)
     }
 
+    /// The ring's MAC, most significant byte first like G2's `extractMac`. The
+    /// advertisement is "ER", the MAC little-endian, then the ASCII serial; the
+    /// name ("EVEN R1_B3BDEF") ends in the MAC's last three bytes, which confirms
+    /// that layout. Reading the last six bytes, the original approach, returns
+    /// serial characters on that layout, so it is only the fallback. The glasses
+    /// are told this MAC in RING_CONNECT_INFO; a wrong one leaves the ring linked
+    /// to nothing after advStart hands it off.
+    nonisolated static func ringMac(from mfgData: Data, name: String?) -> Data? {
+        if mfgData.count >= 8 {
+            let start = mfgData.startIndex
+            let mac = Data(mfgData[start + 2 ..< start + 8].reversed())
+            let tail = mac.suffix(3).map { String(format: "%02X", $0) }.joined()
+            if name?.uppercased().hasSuffix(tail) == true {
+                return mac
+            }
+        }
+        return mfgData.count >= 6 ? Data(mfgData.suffix(6)) : nil
+    }
+
     /// Parse a MAC string like "AA:BB:CC:DD:EE:FF" or "AABBCCDDEEFF" into 6 raw bytes.
     private func parseMac(_ s: String) -> Data? {
         let cleaned = s.replacingOccurrences(of: ":", with: "")
@@ -566,8 +585,8 @@ extension R1: CBCentralManagerDelegate {
                 Bridge.log(
                     "R1: mfgData: \(mfgData.map { String(format: "%02X", $0) }.joined(separator: " "))"
                 )
-                if mfgData.count >= 6 {
-                    self.ringMacAddressMap[name ?? ""] = Data(mfgData.suffix(6))
+                if let mac = R1.ringMac(from: mfgData, name: name) {
+                    self.ringMacAddressMap[name ?? ""] = mac
                 }
             }
 
