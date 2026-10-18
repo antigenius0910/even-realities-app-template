@@ -1311,6 +1311,9 @@ class DeviceManager: NSObject {
 
         // if the pending wearable is a controller, don't disconnect, use the controller manager to connect
         if ControllerTypes.ALL.contains(pendingWearable) {
+            // Like connectDevice(): the controller may not exist yet, e.g. when a saved
+            // ring is connected without scanning first.
+            initController(pendingWearable)
             controller?.disconnect()
             controller?.connectById(name)
             return
@@ -1370,7 +1373,7 @@ class DeviceManager: NSObject {
         searchingController = false
         DeviceStore.shared.apply("glasses", "controllerConnected", false)
         controller?.disconnect()
-        controller = nil // Clear the controller reference after disconnect
+        // Keep the controller instance; see disconnectController().
     }
 
     func disconnectController() {
@@ -1378,7 +1381,9 @@ class DeviceManager: NSObject {
         // disconnect the controller from the glasses if applicable:
         sgc?.disconnectController()
         controller?.disconnect()
-        controller = nil // Clear the controller reference after disconnect
+        // Keep the controller instance. Each R1 owns a CBCentralManager with a fixed
+        // restore identifier, and iOS reports a second live manager with the same
+        // identifier as .unsupported, so a replacement R1 could never scan or connect.
     }
 
     func forget() {
