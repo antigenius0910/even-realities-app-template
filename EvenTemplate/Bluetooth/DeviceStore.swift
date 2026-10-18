@@ -70,6 +70,8 @@ class DeviceStore {
         store.set("glasses", "hotspotGatewayIp", "")
         store.set("glasses", "bluetoothName", "")
         store.set("glasses", "macAddress", "")
+        store.set("glasses", "leftArmConnected", false)
+        store.set("glasses", "rightArmConnected", false)
         store.set("glasses", "controllerConnected", false)
         store.set("glasses", "controllerMacAddress", "")
         store.set("glasses", "controllerBatteryLevel", -1)

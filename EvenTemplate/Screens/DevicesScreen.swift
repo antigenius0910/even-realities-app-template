@@ -71,18 +71,16 @@ struct DevicesScreen: View {
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
-                            Button("Connect") {
-                                session.connect(device)
-                            }
+                            connectControl(device)
                         }
                     }
                 }
             }
 
             Section("Status") {
-                meta("Connection", session.glasses.connection.rawValue.lowercased())
+                linkRow("Glasses", glassesLink)
+                linkRow("R1 ring", ringLink)
                 if session.glasses.connected {
-                    meta("Ready", session.glasses.ready ? "yes" : "booting…")
                     meta("Model", session.glasses.device?.deviceModel?.rawValue ?? "unknown")
                     meta("Bluetooth name", session.glasses.device?.bluetoothName ?? "unknown")
                     meta("Battery", batteryText)
@@ -90,7 +88,7 @@ struct DevicesScreen: View {
                     if let dbm = session.glasses.signal?.strengthDbm {
                         meta("Signal", "\(dbm) dBm")
                     }
-                } else {
+                } else if glassesLink.state == .off {
                     Text("Not connected. Scan and pick a device above, or reconnect the saved default below.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
@@ -236,6 +234,74 @@ struct DevicesScreen: View {
         }
         .onChange(of: hideBuiltinMenuApps) { hidden in
             session.sdk.setBuiltinMenuAppsHidden(hidden)
+        }
+    }
+
+    private enum LinkState {
+        case off, connecting, on
+    }
+
+    private var glassesLink: (state: LinkState, detail: String) {
+        let link = session.link
+        if session.glasses.ready {
+            return (.on, "Connected and ready")
+        }
+        if link.leftArmConnected || link.rightArmConnected {
+            // The arms connect separately; one stuck on "waiting" usually means
+            // another phone still holds it.
+            let arms = "Left arm \(link.leftArmConnected ? "connected" : "waiting…") · Right arm \(link.rightArmConnected ? "connected" : "waiting…")"
+            return (.connecting, link.leftArmConnected && link.rightArmConnected
+                ? "\(arms) · starting up…"
+                : "\(arms). If an arm keeps waiting, make sure no other phone is connected to the glasses.")
+        }
+        if session.glasses.connected || session.connectingModel.map({ $0 != .r1 }) == true {
+            return (.connecting, "Connecting…")
+        }
+        return (.off, "Not connected")
+    }
+
+    private var ringLink: (state: LinkState, detail: String) {
+        if session.link.ringConnected {
+            return (.on, session.link.ringBatteryLevel.map { "Connected · battery \($0)%" } ?? "Connected")
+        }
+        if session.isConnecting(.r1) {
+            return (.connecting, "Connecting…")
+        }
+        return (.off, session.glasses.ready ? "Not connected" : "Not connected. Connect the glasses first.")
+    }
+
+    private func linkRow(_ title: String, _ link: (state: LinkState, detail: String)) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(link.state == .on ? Color.green : link.state == .connecting ? Color.orange : Color.gray)
+                .frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(link.detail)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            if link.state == .connecting {
+                ProgressView()
+            }
+        }
+    }
+
+    /// Replaces Connect while a connection is in progress, so a second tap
+    /// can't restart it, and holds the ring back until the glasses are ready.
+    @ViewBuilder
+    private func connectControl(_ device: Device) -> some View {
+        if session.isConnected(device.model) {
+            Text("Connected")
+                .foregroundColor(.green)
+        } else if session.isConnecting(device.model) {
+            ProgressView()
+        } else {
+            Button("Connect") {
+                session.connect(device)
+            }
+            .disabled(device.model == .r1 && !session.glasses.ready)
         }
     }
 

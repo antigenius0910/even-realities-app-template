@@ -246,6 +246,14 @@ struct GlassesStatus: CustomStringConvertible {
         boolValue(values, "headUp") ?? false
     }
 
+    var leftArmConnected: Bool {
+        boolValue(values, "leftArmConnected") ?? false
+    }
+
+    var rightArmConnected: Bool {
+        boolValue(values, "rightArmConnected") ?? false
+    }
+
     var controllerConnected: Bool {
         boolValue(values, "controllerConnected") ?? false
     }

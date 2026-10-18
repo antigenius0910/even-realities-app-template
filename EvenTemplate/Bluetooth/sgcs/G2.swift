@@ -1508,8 +1508,22 @@ class G2: NSObject, SGCManager {
     private var rightNotifyChar: CBCharacteristic?
     private var rightAudioChar: CBCharacteristic?
     private var leftAudioChar: CBCharacteristic?
-    private var leftInitialized: Bool = false
-    private var rightInitialized: Bool = false
+    /// Published per arm so the UI can show progress while connecting:
+    /// `connected` / `fullyBooted` only flip once both arms are up and authenticated.
+    private var leftInitialized: Bool = false {
+        didSet {
+            if leftInitialized != oldValue {
+                DeviceStore.shared.apply("glasses", "leftArmConnected", leftInitialized)
+            }
+        }
+    }
+    private var rightInitialized: Bool = false {
+        didSet {
+            if rightInitialized != oldValue {
+                DeviceStore.shared.apply("glasses", "rightArmConnected", rightInitialized)
+            }
+        }
+    }
     private var leftAuthenticated: Bool = false
     private var rightAuthenticated: Bool = false
     private var isDisconnecting = false
