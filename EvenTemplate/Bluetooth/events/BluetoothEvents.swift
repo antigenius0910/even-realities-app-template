@@ -35,6 +35,12 @@ public struct TouchEvent: CustomStringConvertible {
         intValue(values["timestamp"])
     }
 
+    /// G2 only: which input produced the event. 2 is the R1 ring relayed
+    /// through the glasses; nil for events the ring sends the phone directly.
+    public var source: Int? {
+        intValue(values["source"])
+    }
+
     public var isSwipe: Bool {
         gestureName?.localizedCaseInsensitiveContains("swipe") == true
     }
